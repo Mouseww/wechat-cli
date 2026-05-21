@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=64.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wechat-cli"
+version = "0.1.0"
+description = "WeChat CLI - 第三方工具对接微信的统一桥梁 (WeFlow + easyChat)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "httpx>=0.25.0",
+    "click>=8.1.0",
+    "rich>=13.0.0",
+    "sse-starlette>=1.8.0",
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+# easyChat 依赖 (仅 Windows)
+win = [
+    "uiautomation>=2.0",
+    "pyperclip>=1.8",
+    "PyQt5>=5.15",
+    "pyautogui>=0.9",
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "Pillow>=10.0",
+]
+
+[project.scripts]
+wechat-cli = "wechat_cli.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["wechat_cli*"]
