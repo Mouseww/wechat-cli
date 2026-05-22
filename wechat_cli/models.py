@@ -108,7 +108,10 @@ class ServerConfig(BaseModel):
     agent_api_key: Optional[str] = Field(default=None)
     auto_reply_enabled: bool = False
     reply_delay_ms: int = 500
-    log_level: str = "INFO"
+    # 原生驱动模式 (替代 WeFlow 和 easyChat)
+    use_native_driver: bool = True
+    wechat_data_path: Optional[str] = None # 自动检测
+    wechat_hotkey: str = "{Ctrl}{Alt}w"
     # 过滤规则
     listen_sessions: Optional[List[str]] = Field(default=None, description="监听的会话白名单（填wxid或显示名称均可）")
     ignore_sessions: Optional[List[str]] = Field(default=None, description="忽略的会话黑名单")

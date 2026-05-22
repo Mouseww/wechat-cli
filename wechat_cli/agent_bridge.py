@@ -20,9 +20,13 @@ from collections import deque, defaultdict
 from .models import (
     WeChatMessage, AgentRequest, AgentResponse,
     SendRequest, MessageType, SessionType, ServerConfig,
+    SendResponse,
 )
 from .weflow_client import WeFlowClient
 from .easychat_client import EasyChatClient
+from .native_ui import native_send_handler
+from .db_reader import WeChatDBReader
+from .key_extractor import get_key
 
 logger = logging.getLogger("wechat-cli.bridge")
 
@@ -57,6 +61,7 @@ class AgentBridge:
         self.config = config
         self.weflow = WeFlowClient(config.weflow_url, config.weflow_token)
         self.easychat = EasyChatClient()
+        self.db_reader = None
         self.msg_buffer = MessageBuffer()
         self._running = False
         self._stats = {
@@ -78,12 +83,15 @@ class AgentBridge:
         self._stats["started_at"] = time.time()
         logger.info("Agent Bridge 启动中...")
 
-        # 检查 WeFlow 连接
-        healthy = await self.weflow.health()
-        if not healthy:
-            logger.error("无法连接 WeFlow，请确保 WeFlow 已启动且 API 服务已开启")
-            raise ConnectionError("WeFlow 连接失败")
-        logger.info(f"✓ WeFlow 连接成功 ({self.config.weflow_url})")
+        # 检查 WeFlow 连接 (仅在使用非原生驱动或需要云端同步时)
+        if not self.config.use_native_driver:
+            healthy = await self.weflow.health()
+            if not healthy:
+                logger.error("无法连接 WeFlow，请确保 WeFlow 已启动且 API 服务已开启")
+                raise ConnectionError("WeFlow 连接失败")
+            logger.info(f"✓ WeFlow 连接成功 ({self.config.weflow_url})")
+        else:
+            logger.info("✓ 启用原生驱动模式，跳过 WeFlow 检查")
 
         # ★ 预加载会话名称映射（wxid → 显示名称）
         await self.weflow.preload_names()
@@ -97,7 +105,13 @@ class AgentBridge:
 
         # 启动 SSE 订阅
         logger.info("开始监听新消息...")
-        await self.weflow.subscribe_messages(self._on_new_message)
+        if self.config.use_native_driver:
+            key = get_key()
+            # 如果 key 是 AUTO_... 说明还在开发中，这里我们假设已经拿到了
+            self.db_reader = WeChatDBReader(key=key)
+            asyncio.create_task(self.db_reader.start_polling(self._on_new_message))
+        else:
+            await self.weflow.subscribe_messages(self._on_new_message)
 
     async def stop(self):
         self._running = False
@@ -265,4 +279,11 @@ class AgentBridge:
 
         req.to 应该是显示名称（微信里搜得到的名称）
         """
+        if self.config.use_native_driver:
+            success = await native_send_handler(req.to, req.content)
+            return SendResponse(
+                success=success, 
+                message="发送成功" if success else "发送失败",
+                error=None if success else "原生 UI 驱动发送失败"
+            )
         return await self.easychat.send_message(req)
