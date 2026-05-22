@@ -2,7 +2,7 @@
   <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python&logoColor=white" alt="Python 3.9+">
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT License">
   <img src="https://img.shields.io/badge/WeChat-4.0+-07C160?logo=wechat&logoColor=white" alt="WeChat 4.0+">
-  <img src="https://img.shields.io/badge/Driver-Native-orange?logo=cpu&logoColor=white" alt="Native Driver">
+  <img src="https://img.shields.io/badge/Status-Educational-red" alt="Status: Educational Use Only">
 </p>
 
 <h1 align="center">🤖 WeChat CLI</h1>
@@ -12,9 +12,19 @@
 </p>
 
 <p align="center">
-  内置原生驱动，<b>不再需要安装 WeFlow 或 easyChat</b><br>
-  提供 CLI + HTTP API，一行命令让任何 AI 大模型自动回复微信消息
+  ⚠️ <b>重要声明：本项目仅供个人学习、研究及技术交流使用，严禁用于任何商业用途或非法活动。</b>
 </p>
+
+---
+
+## 🛑 免责声明 (Disclaimer)
+
+**在使用本项目之前，请务必仔细阅读以下条款：**
+
+1. **合规性**：本项目通过技术手段（包括但不限于 UI 自动化、内存读取）实现与微信客户端的交互。这些手段可能违反《微信软件许可及服务协议》。**使用本项目存在被微信官方封号的风险**，开发者对此不承担任何责任。
+2. **数据隐私**：本项目所有操作均在本地完成，不会上传用户的任何聊天记录、密钥或个人信息。用户需妥善保管本地生成的任何数据。
+3. **法律责任**：用户使用本项目从事的任何行为及其后果由用户自行承担。严禁利用本项目从事监听、窃取他人隐私、群发骚扰信息等违法违规行为。
+4. **非官方**：本项目为非官方开源项目，与腾讯公司或微信官方无任何关联。
 
 ---
 
@@ -22,16 +32,15 @@
 
 | 痛点 | WeChat CLI 的解法 |
 |------|-------------------|
-| 📦 依赖多且重 | **内置原生驱动**，直接读取微信数据库 & 操作 UI，零外部软件依赖 |
+| 📦 依赖多且重 | **内置原生驱动**，直接读取微信数据库 & 操作 UI，实现研究级的一键集成 |
 | 🔒 隐私泄露 | **本地提 Key**，不修改微信客户端，不连接第三方解密服务 |
 | 🤖 想让 AI 回复 | 内置 Agent Bridge，支持 **OpenAI / Claude / Ollama** 等任意 LLM |
-| 🎯 消息定位难 | 智能名称解析（`NameResolver`），wxid ↔ 显示名称自动映射 |
 | ⚙️ 配置复杂 | CLI 一行命令搞定，也支持运行时热更新配置 |
 
-## 🚀 核心驱动模式
+## 🚀 驱动模式说明
 
-- **Native Driver (推荐)**: 自动从微信进程提取密钥，直接解密读取 `MSG.db`，通过原生 UI Automation 发送消息。**无需安装 WeFlow/easyChat。**
-- **Legacy Mode**: 兼容模式，仍支持通过 WeFlow API 和 easyChat 服务进行交互。
+- **Native Driver (研究用)**: 自动从微信进程提取密钥，直接解密读取 `MSG.db`。此模式旨在演示跨进程内存访问和数据库解密原理。
+- **Legacy Mode**: 兼容模式，支持通过第三方 API 服务进行交互。
 
 ## 📐 架构
 
@@ -49,12 +58,6 @@
 │  │        自动提 Key / 实时监听 / 原生 UI 自动化         │  │
 │  └────────────────────────┬───────────────────────────────┘  │
 └───────────────────────────┼─────────────────────────────────┘
-                            │
-                  ┌─────────┴─────────┐
-                  │    AI Agent        │
-                  │  Webhook 回调      │
-                  │ GPT / Claude / ... │
-                  └────────────────────┘
 ```
 
 ## ⚡ 快速开始
@@ -66,61 +69,30 @@ git clone https://github.com/Mouseww/wechat-cli.git
 cd wechat-cli
 pip install -e .
 
-# 安装原生驱动依赖 (Windows)
+# 安装依赖 (Windows)
 pip install uiautomation pyperclip pycryptodome psutil
 ```
 
 ### 2. 配置与启动
 
 ```bash
-# 启用原生驱动模式（不再需要 WeFlow）
+# 启用原生驱动模式
 wechat-cli config set use_native_driver true
 
-# 检查连接（会自动尝试提取微信密钥）
+# 检查状态
 wechat-cli status
 
 # 启动服务
 wechat-cli start
 ```
 
-## 🧠 3 分钟接入 AI Agent
-
-```python
-# agent_openai.py —— 用 OpenAI API 自动回复
-import os
-from openai import OpenAI
-
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
-    base_url=os.getenv("OPENAI_BASE_URL"),
-)
-
-async def handle_message(msg: dict):
-    # 你的 AI 逻辑...
-    return "回复内容"
-```
-
 ## 🔧 CLI 命令大全
 
 ```bash
-# ── 基础操作 ──────────────────────────────
 wechat-cli start                    启动服务
 wechat-cli status                   查看驱动状态与密钥信息
 wechat-cli send "张三" "你好"       原生驱动发送消息
-wechat-cli resolve wxid_xxx         查询名称映射
-
-# ── 配置管理 ──────────────────────────────
-wechat-cli config set use_native_driver true
-wechat-cli config set auto_reply_enabled true
 ```
-
-## ❓ FAQ
-
-**Q: 需要安装 WeFlow 吗？**
-A: 最新版不再需要。WeChat CLI 现在可以直接从内存提取密钥并解密数据库。
-
-**Q: 支持微信哪些版本？**
-A: 完美支持微信 4.0+ 桌面版（Windows）。
 
 ---
 <p align="center">
