@@ -78,11 +78,31 @@ pip install -e .
 pip install uiautomation pyperclip pycryptodome psutil
 ```
 
-### 2. 配置与启动
+### 2. 安装并启动 WeFlow
+
+完整环境需要同时运行 WeFlow。`sessions`、`contacts`、`messages`、名称解析、SSE 新消息订阅和自动回复链路都依赖 WeFlow HTTP API；仅 UI 自动化发送可以在读取通道不可用时单独工作。
+
+1. 安装并打开 WeFlow。
+2. 在 WeFlow 中连接当前微信账号的数据源。
+3. 打开 WeFlow 的 API 服务，默认地址应为 `http://127.0.0.1:5031`。
+4. 如启用了 Token，在后续命令中配置 `weflow_token`。
+
+可用以下命令检查 WeFlow API：
+
+```bash
+curl http://127.0.0.1:5031/health
+```
+
+WeFlow API 文档参考：https://weflow.imsry.cn/api-reference
+
+### 3. 配置与启动
 
 ```bash
 # 启用原生驱动模式
 wechat-cli config set use_native_driver true
+
+# 配置 WeFlow API
+wechat-cli config set weflow_url http://127.0.0.1:5031
 
 # 检查状态
 wechat-cli status
@@ -90,6 +110,16 @@ wechat-cli status
 # 启动服务
 wechat-cli start
 ```
+
+## 🧠 让大模型安装完整环境
+
+仓库内置了一个安装 Skill，可交给支持 Skills 的大模型直接执行完整安装和验收：
+
+```text
+Use the skill at skills/wechat-cli-installer to install the full WeChat CLI environment on Windows.
+```
+
+该 Skill 会引导大模型完成 Python 环境、Windows UI 自动化依赖、WeFlow API、CLI 配置、发送通道和读取通道的检查。
 
 ## 🔧 CLI 命令大全
 
