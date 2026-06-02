@@ -1,0 +1,3 @@
+display_name: WeChat CLI Installer
+short_description: Install and validate WeChat CLI with WeFlow on Windows.
+default_prompt: Install the full WeChat CLI environment for this repository, including WeFlow API setup, Windows UI automation dependencies, CLI configuration, and smoke tests.

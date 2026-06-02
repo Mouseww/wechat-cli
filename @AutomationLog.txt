@@ -1,0 +1,6 @@
+
+[WinError -2147221008] 尚未调用 CoInitialize。
+Can not load UIAutomationCore.dll.
+1, You may need to install Windows Update KB971513 if your OS is Windows XP, see https://github.com/yinkaisheng/WindowsUpdateKB971513ForIUIAutomation
+2, You need to use an UIAutomationInitializerInThread object if use uiautomation in a thread, see demos/uiautomation_in_thread.py
+2026-06-02 15:42:16.156 native_ui.py[71] send_text -> Find Control Timeout(10s): {Name: '搜索', ControlType: EditControl, Depth: 14}
