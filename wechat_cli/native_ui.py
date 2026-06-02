@@ -24,16 +24,31 @@ class NativeWeChatUI:
         """寻找并激活微信窗口"""
         if not auto:
             raise ImportError("请安装依赖: pip install uiautomation pyperclip")
-        
-        # 4.0+ 版本的 ClassName 特征
-        wechat_win = auto.WindowControl(searchDepth=1, ClassName="WeChatMainWndForPC")
-        if not wechat_win.Exists(0):
+
+        # 不同微信桌面端版本的顶层窗口类名不同。
+        candidates = [
+            {"ClassName": "WeChatMainWndForPC"},
+            {"ClassName": "Qt51514QWindowIcon", "Name": "微信"},
+            {"Name": "微信"},
+        ]
+        wechat_win = None
+        for candidate in candidates:
+            window = auto.WindowControl(searchDepth=1, **candidate)
+            if window.Exists(0):
+                wechat_win = window
+                break
+
+        if not wechat_win:
             # 尝试通过快捷键唤起
             auto.SendKeys(self.hotkey)
             time.sleep(0.5)
-            wechat_win = auto.WindowControl(searchDepth=1, ClassName="WeChatMainWndForPC")
-        
-        if wechat_win.Exists(0):
+            for candidate in candidates:
+                window = auto.WindowControl(searchDepth=1, **candidate)
+                if window.Exists(0):
+                    wechat_win = window
+                    break
+
+        if wechat_win and wechat_win.Exists(0):
             wechat_win.SetFocus()
             return wechat_win
         return None
@@ -53,18 +68,26 @@ class NativeWeChatUI:
 
             # 2. 点击搜索框
             search_box = win.EditControl(Name="搜索", Depth=14)
-            search_box.Click(simulateMove=False)
+            if search_box.Exists(1):
+                search_box.Click(simulateMove=False)
+            else:
+                auto.SendKeys("{Ctrl}f")
+                time.sleep(0.3)
             
             # 3. 输入目标名称
             pyperclip.copy(to_name)
             auto.SendKeys("{Ctrl}v")
             time.sleep(0.3)
             auto.SendKeys("{Enter}") # 选中第一个结果
+            time.sleep(0.5)
 
             # 4. 粘贴内容到输入框
-            # 4.0+ 的输入框通常是一个包含在某处的 EditControl
-            input_box = win.EditControl(Name=to_name, searchDepth=15) 
-            # 如果按名称找不准，通常直接 SendKeys 即可，因为 Enter 后焦点就在输入框
+            # Qt 版微信内部控件不总是暴露给 UIAutomation，显式点击底部输入区。
+            rect = win.BoundingRectangle
+            input_x = rect.left + int((rect.right - rect.left) * 0.62)
+            input_y = rect.bottom - 95
+            auto.Click(input_x, input_y)
+            time.sleep(0.2)
             pyperclip.copy(content)
             auto.SendKeys("{Ctrl}v")
             
@@ -82,6 +105,17 @@ class NativeWeChatUI:
 
 async def native_send_handler(to: str, content: str):
     """异步包装器"""
-    ui = NativeWeChatUI()
+    def _send_in_thread() -> bool:
+        ui = NativeWeChatUI()
+        initializer = getattr(auto, "UIAutomationInitializerInThread", None) if auto else None
+        try:
+            if initializer:
+                with initializer():
+                    return ui.send_text(to, content)
+            return ui.send_text(to, content)
+        except Exception as e:
+            logger.error(f"原生 UI 发送失败: {e}")
+            return False
+
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, ui.send_text, to, content)
+    return await loop.run_in_executor(None, _send_in_thread)

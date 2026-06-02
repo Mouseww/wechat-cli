@@ -99,6 +99,45 @@ wechat-cli status                   查看驱动状态与密钥信息
 wechat-cli send "张三" "你好"       原生驱动发送消息
 ```
 
+## 🪟 Windows 微信 4.x 发送配置指南
+
+### 环境要求
+
+- Windows 桌面端微信已打开并登录。
+- 微信主窗口保持可见，不要最小化。
+- 已安装发送依赖：
+
+```bash
+pip install uiautomation pyperclip psutil
+```
+
+### 发送前检查
+
+```bash
+wechat-cli status
+```
+
+`发送通道` 应显示为 `可用`。`读取通道` 依赖本地数据库解密状态，读取不可用不影响 UI 自动化发送。
+
+### 发送消息
+
+```bash
+wechat-cli send "文件传输助手" "测试发送"
+wechat-cli send "Webber" "测试发送"
+```
+
+`TO` 必须是微信里能搜索到的好友备注、昵称或群聊名称。CLI 会先通过微信搜索打开目标会话，再把内容粘贴到当前会话输入区并发送，避免误发到当前焦点所在的聊天窗口。
+
+### 微信 4.x Qt 窗口兼容
+
+部分微信 4.x 客户端的主窗口类名不是旧版 `WeChatMainWndForPC`，而是 `Qt51514QWindowIcon`。当前原生驱动会按以下顺序查找窗口：
+
+1. `WeChatMainWndForPC`
+2. `Qt51514QWindowIcon` + 标题 `微信`
+3. 标题 `微信`
+
+如果 UIAutomation 无法识别微信内部输入框，驱动会在搜索并打开目标会话后，点击窗口底部输入区域作为回退路径，再粘贴并发送消息。
+
 ---
 <p align="center">
   <b>如果觉得有用，请给个 ⭐ Star 支持一下！</b>
