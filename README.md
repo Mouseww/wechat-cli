@@ -69,18 +69,23 @@
 
 ### 1. 安装
 
-```bash
+Windows 推荐直接运行一键安装脚本。脚本会创建 `.venv`、安装 Python 依赖、检测 WeFlow；如果 WeFlow API 不可用，会自动下载并启动 WeFlow 安装程序。
+
+```powershell
 git clone https://github.com/Mouseww/wechat-cli.git
 cd wechat-cli
-pip install -e .
+.\install.bat
+```
 
-# 安装依赖 (Windows)
-pip install uiautomation pyperclip pycryptodome psutil
+也可以直接运行 PowerShell 脚本：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
 ```
 
 ### 2. 安装并启动 WeFlow
 
-完整环境需要同时运行 WeFlow。`sessions`、`contacts`、`messages`、名称解析、SSE 新消息订阅和自动回复链路都依赖 WeFlow HTTP API；仅 UI 自动化发送可以在读取通道不可用时单独工作。
+完整环境需要同时运行 WeFlow。`sessions`、`contacts`、`messages`、名称解析、SSE 新消息订阅和自动回复链路都依赖 WeFlow HTTP API；仅 UI 自动化发送可以在读取通道不可用时单独工作。一键安装脚本会在检测不到 WeFlow API 时自动安装 WeFlow。
 
 1. 安装并打开 WeFlow。
 2. 在 WeFlow 中连接当前微信账号的数据源。
