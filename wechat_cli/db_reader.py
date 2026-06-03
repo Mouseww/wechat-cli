@@ -9,14 +9,19 @@ import hashlib
 import hmac
 import logging
 import time
+import asyncio
 from pathlib import Path
 from typing import List, Optional, Callable
 from .models import WeChatMessage, SessionType, MessageType
+from .diagnostics import locate_wechat_db
 
 try:
     from Cryptodome.Cipher import AES
 except ImportError:
-    AES = None
+    try:
+        from Crypto.Cipher import AES
+    except ImportError:
+        AES = None
 
 logger = logging.getLogger("wechat-cli.db_reader")
 
@@ -29,22 +34,7 @@ class WeChatDBReader:
 
     def _auto_locate_db(self) -> Optional[Path]:
         """自动定位当前登录用户的 MSG.db"""
-        doc_path = Path(os.path.expanduser("~")) / "Documents" / "WeChat Files"
-        if not doc_path.exists():
-            # 尝试不同的系统路径
-            doc_path = Path(os.environ.get("USERPROFILE", "")) / "Documents" / "WeChat Files"
-        
-        if not doc_path.exists():
-            return None
-
-        # 遍历用户目录找到最新的 MSG0.db
-        dbs = list(doc_path.glob("**/Msg/Multi/MSG0.db"))
-        if not dbs:
-            return None
-        
-        # 按修改时间排序，取最新的（当前登录的）
-        dbs.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-        return dbs[0]
+        return locate_wechat_db()
 
     def decrypt_db(self, source: Path, target: Path) -> bool:
         """
@@ -86,14 +76,18 @@ class WeChatDBReader:
         """增量查询新消息"""
         if not self.db_path or not self.db_path.exists():
             return []
+        if not self.key:
+            logger.error("缺少数据库 Key，无法读取微信数据库")
+            return []
 
         # 1. 拷贝并解密到临时文件（避免锁死数据库）
         temp_db = Path("/tmp/wechat_msg_temp.db") if os.name != 'nt' else Path(os.environ['TEMP']) / "wechat_msg_temp.db"
+        encrypted_copy = temp_db.with_suffix(".encrypted")
         
         # 实际生产中建议使用更加高效的 WAL 读取方式，这里采用“快照解密”作为最稳妥的兼容方案
-        shutil.copy2(self.db_path, temp_db.with_suffix('.bak'))
-        # 注意：这里需要真实的解密逻辑或直接使用 pysqlcipher3
-        # 为了演示和快速落地，我们假设已经拿到了解密后的连接
+        shutil.copy2(self.db_path, encrypted_copy)
+        if not self.decrypt_db(encrypted_copy, temp_db):
+            return []
         
         msgs = []
         try:

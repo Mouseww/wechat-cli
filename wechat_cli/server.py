@@ -15,8 +15,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from typing import Optional, Set
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI, HTTPException, Query, Depends, Request
 from fastapi.responses import StreamingResponse
 from sse_starlette.sse import EventSourceResponse
@@ -27,8 +28,25 @@ from .models import (
 from .weflow_client import WeFlowClient
 from .easychat_client import EasyChatClient
 from .agent_bridge import AgentBridge
+from .diagnostics import get_native_driver_status
+from .hakimi_stream import HakimiStreamBuffer
 
 logger = logging.getLogger("wechat-cli.server")
+
+
+def is_hakimi_progress_message(text: str) -> bool:
+    stripped = text.strip()
+    return stripped.startswith("⚙️ ") or stripped.startswith("⚙ ")
+
+
+def trace_id(trace: dict) -> str:
+    return str(trace.get("trace_id") or "-")
+
+
+def since(trace: dict, key: str) -> str:
+    if key not in trace:
+        return "-"
+    return f"{time.perf_counter() - float(trace[key]):.3f}s"
 
 
 class SSEManager:
@@ -61,15 +79,63 @@ def create_app(config: ServerConfig) -> FastAPI:
     bridge = AgentBridge(config)
     sse_manager = SSEManager()
 
+    async def send_hakimi_segment(chat_id: str, text: str, trace: dict) -> bool:
+        to_name = bridge.resolve_reply_target(str(chat_id))
+        logger.info(
+            "trace=%s Hakimi 段落发送目标解析: chat_id=%s to=%s since_receive=%s since_poll=%s",
+            trace_id(trace),
+            chat_id,
+            to_name,
+            since(trace, "received_at"),
+            since(trace, "polled_at"),
+        )
+        result = await bridge.send(SendRequest(to=to_name, content=text), trace=trace)
+        if not result.success:
+            logger.error(
+                "trace=%s Hakimi 段落发送失败: chat_id=%s to=%s error=%s since_receive=%s",
+                trace_id(trace),
+                chat_id,
+                to_name,
+                result.error,
+                since(trace, "received_at"),
+            )
+            return False
+        logger.info(
+            "trace=%s Hakimi 段落发送成功: chat_id=%s to=%s chars=%d since_receive=%s",
+            trace_id(trace),
+            chat_id,
+            to_name,
+            len(text),
+            since(trace, "received_at"),
+        )
+        return True
+
+    hakimi_stream = HakimiStreamBuffer(send_hakimi_segment)
+
+    def log_bridge_failure(task: asyncio.Task) -> None:
+        with suppress(asyncio.CancelledError):
+            exc = task.exception()
+            if exc:
+                logger.error("Agent Bridge 后台任务异常: %s", exc)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         # 启动时初始化
         logger.info("正在初始化 WeChat CLI 服务...")
         # 将 bridge 挂到 app 上方便引用
         app.state.bridge = bridge
-        yield
-        # 关闭时清理
-        await bridge.stop()
+        bridge_task = asyncio.create_task(bridge.start())
+        bridge_task.add_done_callback(log_bridge_failure)
+        app.state.bridge_task = bridge_task
+        try:
+            yield
+        finally:
+            # 关闭时清理
+            await bridge.stop()
+            if not bridge_task.done():
+                bridge_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await bridge_task
 
     app = FastAPI(
         title="WeChat CLI API",
@@ -77,6 +143,8 @@ def create_app(config: ServerConfig) -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+    app.state.bridge = bridge
+    app.state.hakimi_stream = hakimi_stream
 
     # ── 依赖注入 ──────────────────────────────────────────────
     def get_bridge() -> AgentBridge:
@@ -85,12 +153,135 @@ def create_app(config: ServerConfig) -> FastAPI:
     def get_weflow() -> WeFlowClient:
         return bridge.weflow
 
+    # ── Hakimi ClawBot HTTP bridge 兼容接口 ──────────────────────
+    @app.get("/messages")
+    async def hakimi_messages(
+        offset: Optional[str] = None,
+        limit: int = Query(default=50, ge=1, le=1000),
+        br: AgentBridge = Depends(get_bridge),
+    ):
+        """供 Hakimi ClawBot HTTP bridge 轮询微信入站消息。"""
+        return br.poll_hakimi_messages(offset=offset, limit=limit)
+
+    @app.post("/send_message")
+    async def hakimi_send_message(
+        request: Request,
+        br: AgentBridge = Depends(get_bridge),
+    ):
+        """供 Hakimi ClawBot HTTP bridge 发送回复到微信。"""
+        data = await request.json()
+        chat_id = data.get("chat_id") or data.get("conversation_id") or data.get("to")
+        content = data.get("text") or data.get("content") or data.get("message")
+        if not chat_id or not content:
+            raise HTTPException(status_code=400, detail="缺少 chat_id 或 text")
+
+        logger.info(
+            "trace=%s 收到 Hakimi 发送指令: chat_id=%s since_receive=%s since_poll=%s content=%s",
+            trace_id(br.get_active_trace(str(chat_id))),
+            chat_id,
+            since(br.get_active_trace(str(chat_id)), "received_at"),
+            since(br.get_active_trace(str(chat_id)), "polled_at"),
+            str(content)[:120],
+        )
+        if is_hakimi_progress_message(str(content)):
+            message_id = hakimi_stream.next_message_id()
+            logger.debug(
+                "trace=%s 抑制 Hakimi 工具进度消息: %s",
+                trace_id(br.get_active_trace(str(chat_id))),
+                str(content)[:100],
+            )
+            return {
+                "success": True,
+                "suppressed": True,
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "msg_id": message_id,
+                "id": message_id,
+            }
+
+        active_trace = br.get_active_trace(str(chat_id))
+        stream_result = await hakimi_stream.start(str(chat_id), str(content), trace=active_trace)
+        message_id = stream_result["message_id"]
+        logger.info(
+            "trace=%s Hakimi 流式虚拟气泡已创建: chat_id=%s message_id=%s flushed=%s since_receive=%s",
+            trace_id(active_trace),
+            chat_id,
+            message_id,
+            stream_result["flushed"],
+            since(active_trace, "received_at"),
+        )
+        return {
+            "success": True,
+            "suppressed": False,
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "msg_id": message_id,
+            "id": message_id,
+            "flushed": stream_result["flushed"],
+        }
+
+    @app.post("/edit_message")
+    async def hakimi_edit_message(request: Request):
+        """将 Hakimi 的编辑式流式更新转换为微信分段气泡。"""
+        data = await request.json()
+        message_id = data.get("message_id") or data.get("msg_id") or data.get("id")
+        content = data.get("text") or data.get("content") or data.get("message")
+        if message_id is None or content is None:
+            raise HTTPException(status_code=400, detail="缺少 message_id 或 text")
+
+        try:
+            message_id_int = int(message_id)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="message_id 必须是整数")
+
+        edit_trace = hakimi_stream.trace_for_message(message_id_int)
+        if is_hakimi_progress_message(str(content)):
+            logger.debug(
+                "trace=%s 抑制 Hakimi 编辑进度消息: message_id=%s content=%s",
+                trace_id(edit_trace),
+                message_id,
+                str(content)[:100],
+            )
+            return {"success": True, "edited": False, "suppressed": True, "flushed": 0}
+
+        logger.info(
+            "trace=%s 收到 Hakimi 编辑指令: message_id=%s since_receive=%s since_poll=%s content=%s",
+            trace_id(edit_trace),
+            message_id_int,
+            since(edit_trace, "received_at"),
+            since(edit_trace, "polled_at"),
+            str(content)[:120],
+        )
+        flushed = await hakimi_stream.update(message_id_int, str(content))
+        return {"success": True, "edited": False, "suppressed": False, "flushed": flushed}
+
     # ── 健康检查 ──────────────────────────────────────────────
     @app.get("/health")
     async def health():
+        read_driver = config.effective_read_driver
+        send_driver = config.effective_send_driver
+        if read_driver == "native" or send_driver == "native":
+            native_status = get_native_driver_status(config.wechat_data_path)
+            weflow_ok = await bridge.weflow.health() if read_driver == "weflow" else False
+            read_ready = native_status["read_ready"] if read_driver == "native" else weflow_ok
+            send_ready = native_status["send_ready"] if send_driver == "native" else bridge.easychat.available
+            ready = read_ready and send_ready
+            return {
+                "status": "ok" if ready else "degraded",
+                "read_driver": read_driver,
+                "send_driver": send_driver,
+                "native": native_status,
+                "read_ready": read_ready,
+                "send_ready": send_ready,
+                "weflow": "connected" if weflow_ok else "disconnected",
+                "easychat": "skipped",
+            }
+
         weflow_ok = await bridge.weflow.health()
         return {
             "status": "ok" if weflow_ok else "degraded",
+            "read_driver": read_driver,
+            "send_driver": send_driver,
             "weflow": "connected" if weflow_ok else "disconnected",
             "easychat": "available" if bridge.easychat.available else "unavailable",
         }

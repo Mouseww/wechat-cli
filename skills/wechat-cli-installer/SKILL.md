@@ -20,15 +20,14 @@ Get-Process | Where-Object { $_.ProcessName -like '*WeChat*' }
 2. Create or use a local virtual environment:
 
 ```powershell
-python -m venv .venv
-& ".venv/Scripts/python.exe" -m pip install --upgrade pip
-& ".venv/Scripts/python.exe" -m pip install -e .
-& ".venv/Scripts/python.exe" -m pip install uiautomation pyperclip pycryptodome psutil
+& "./install.bat"
 ```
 
 3. Require WeFlow for the complete environment:
 
-- Install and open WeFlow.
+- The install script checks WeFlow API.
+- If WeFlow API is unavailable, the script downloads the latest Windows x64 WeFlow installer from GitHub Releases and starts it.
+- Complete the WeFlow installer when prompted.
 - Connect WeFlow to the active WeChat account/data source.
 - Enable WeFlow API service.
 - Use `http://127.0.0.1:5031` unless the user provides another URL.
@@ -37,7 +36,9 @@ python -m venv .venv
 4. Configure WeChat CLI:
 
 ```powershell
-& ".venv/Scripts/python.exe" -m wechat_cli.cli config set use_native_driver true
+& ".venv/Scripts/python.exe" -m wechat_cli.cli config set read_driver weflow
+& ".venv/Scripts/python.exe" -m wechat_cli.cli config set send_driver native
+& ".venv/Scripts/python.exe" -m wechat_cli.cli config set use_native_driver false
 & ".venv/Scripts/python.exe" -m wechat_cli.cli config set weflow_url http://127.0.0.1:5031
 ```
 

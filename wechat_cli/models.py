@@ -107,12 +107,25 @@ class ServerConfig(BaseModel):
     agent_webhook: Optional[str] = Field(default=None, description="AI Agent 回调 URL")
     agent_api_key: Optional[str] = Field(default=None)
     auto_reply_enabled: bool = False
+    log_level: str = "INFO"
     reply_delay_ms: int = 500
-    # 原生驱动模式 (替代 WeFlow 和 easyChat)
-    use_native_driver: bool = True
+    read_driver: str = "weflow"
+    send_driver: str = "native"
+    # 兼容旧配置；新配置请使用 read_driver / send_driver。
+    use_native_driver: bool = False
     wechat_data_path: Optional[str] = None # 自动检测
     wechat_hotkey: str = "{Ctrl}{Alt}w"
     # 过滤规则
     listen_sessions: Optional[List[str]] = Field(default=None, description="监听的会话白名单（填wxid或显示名称均可）")
     ignore_sessions: Optional[List[str]] = Field(default=None, description="忽略的会话黑名单")
     listen_keywords: Optional[List[str]] = Field(default=None, description="监听的关键词")
+
+    @property
+    def effective_read_driver(self) -> str:
+        """返回实际读取通道。"""
+        return "native" if self.use_native_driver else self.read_driver
+
+    @property
+    def effective_send_driver(self) -> str:
+        """返回实际发送通道。"""
+        return "native" if self.use_native_driver else self.send_driver

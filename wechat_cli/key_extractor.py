@@ -7,6 +7,7 @@ import ctypes.wintypes
 import re
 import psutil
 import logging
+from .diagnostics import WECHAT_PROCESS_NAMES
 
 logger = logging.getLogger("wechat-cli.key_extractor")
 
@@ -20,7 +21,7 @@ class KeyExtractor:
 
     def get_wechat_pid(self):
         for proc in psutil.process_iter(['pid', 'name']):
-            if proc.info['name'].lower() == 'wechat.exe':
+            if (proc.info.get('name') or '').lower() in WECHAT_PROCESS_NAMES:
                 return proc.info['pid']
         return None
 
@@ -52,13 +53,13 @@ class KeyExtractor:
         """
         pid = self.get_wechat_pid()
         if not pid:
-            logger.error("未发现运行中的微信进程")
+            logger.warning("未发现运行中的微信进程")
             return None
 
         # 定位 WeChatWin.dll
         base_addr = self.get_module_base(pid, "WeChatWin.dll")
         if not base_addr:
-            logger.error("未能定位 WeChatWin.dll")
+            logger.warning("未能定位 WeChatWin.dll")
             return None
 
         # 这里的 Offset 需要根据微信具体版本维护（特征码搜索）

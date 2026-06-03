@@ -69,18 +69,23 @@
 
 ### 1. 安装
 
-```bash
+Windows 推荐直接运行一键安装脚本。脚本会创建 `.venv`、安装 Python 依赖、检测 WeFlow；如果 WeFlow API 不可用，会自动下载并启动 WeFlow 安装程序。
+
+```powershell
 git clone https://github.com/Mouseww/wechat-cli.git
 cd wechat-cli
-pip install -e .
+.\install.bat
+```
 
-# 安装依赖 (Windows)
-pip install uiautomation pyperclip pycryptodome psutil
+也可以直接运行 PowerShell 脚本：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
 ```
 
 ### 2. 安装并启动 WeFlow
 
-完整环境需要同时运行 WeFlow。`sessions`、`contacts`、`messages`、名称解析、SSE 新消息订阅和自动回复链路都依赖 WeFlow HTTP API；仅 UI 自动化发送可以在读取通道不可用时单独工作。
+完整环境需要同时运行 WeFlow。`sessions`、`contacts`、`messages`、名称解析、SSE 新消息订阅和自动回复链路都依赖 WeFlow HTTP API；仅 UI 自动化发送可以在读取通道不可用时单独工作。一键安装脚本会在检测不到 WeFlow API 时自动安装 WeFlow。
 
 1. 安装并打开 WeFlow。
 2. 在 WeFlow 中连接当前微信账号的数据源。
@@ -98,8 +103,10 @@ WeFlow API 文档参考：https://weflow.imsry.cn/api-reference
 ### 3. 配置与启动
 
 ```bash
-# 启用原生驱动模式
-wechat-cli config set use_native_driver true
+# 默认读取使用 WeFlow，发送使用原生 UI 自动化
+wechat-cli config set read_driver weflow
+wechat-cli config set send_driver native
+wechat-cli config set use_native_driver false
 
 # 配置 WeFlow API
 wechat-cli config set weflow_url http://127.0.0.1:5031
@@ -110,6 +117,42 @@ wechat-cli status
 # 启动服务
 wechat-cli start
 ```
+
+### 4. 接入 Hakimi 多会话 Gateway
+
+把微信作为 Hakimi 的聊天入口时，不要把所有微信消息转发到 Hakimi `/api/chat`；该接口是共享会话，容易让不同联系人串上下文。推荐让 Hakimi 使用已有的 `clawbot` HTTP bridge 模式轮询 `wechat-cli`：
+
+```yaml
+# ~/.hakimi/config.yaml
+gateways:
+  clawbot:
+    enabled: true
+    mode: "http_bridge"
+    bot_id: "clawbot"
+    base_url: "http://127.0.0.1:5032"
+    poll_path: "/messages"
+    send_path: "/send_message"
+    edit_path: "/edit_message"
+    poll_interval_ms: 1000
+    poll_limit: 50
+```
+
+运行方式：
+
+```powershell
+# 终端 1：启动微信 sidecar。它会自动检查/启动 WeFlow，并监听微信消息。
+wechat-cli start
+
+# 终端 2：启动 Hakimi gateway。
+hakimi --gateway
+```
+
+多会话映射规则：
+
+- 微信 `session_id` 会作为 Hakimi gateway 的 `chat_id`。
+- 不同联系人/群聊会进入 Hakimi 不同 chat 历史，避免上下文串线。
+- Hakimi 回复时调用 `POST /send_message`，`wechat-cli` 会把 `chat_id` 映射回微信显示名称，再用原生 UI 发送。
+- 只有先收到过消息的会话一定有显示名称映射；主动给未见过的 wxid 发消息仍建议先用微信显示名。
 
 ## 🧠 让大模型安装完整环境
 
@@ -127,6 +170,14 @@ Use the skill at skills/wechat-cli-installer to install the full WeChat CLI envi
 wechat-cli start                    启动服务
 wechat-cli status                   查看驱动状态与密钥信息
 wechat-cli send "张三" "你好"       原生驱动发送消息
+```
+
+Hakimi bridge 兼容端点：
+
+```bash
+GET  /messages       Hakimi 轮询微信入站消息
+POST /send_message   Hakimi 发送回复到微信
+POST /edit_message   兼容 Hakimi 编辑接口，当前为 no-op
 ```
 
 ## 🪟 Windows 微信 4.x 发送配置指南
@@ -147,7 +198,7 @@ pip install uiautomation pyperclip psutil
 wechat-cli status
 ```
 
-`发送通道` 应显示为 `可用`。`读取通道` 依赖本地数据库解密状态，读取不可用不影响 UI 自动化发送。
+默认模式下 `wechat-cli status` 应显示读取通道为 `weflow`、发送通道为 `native`。读取依赖 WeFlow API；发送依赖 Windows 微信主程序和 UI 自动化依赖。
 
 ### 发送消息
 

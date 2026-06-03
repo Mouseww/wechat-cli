@@ -11,6 +11,36 @@ import logging
 logger = logging.getLogger("wechat-cli.weflow")
 
 
+async def _stream_sse_once(
+    client: httpx.AsyncClient,
+    url: str,
+    params: dict,
+    headers: dict,
+    parse_message: Callable[[dict], Optional[WeChatMessage]],
+    safe_callback: Callable[[Callable[[WeChatMessage], None], WeChatMessage], object],
+    on_message: Callable[[WeChatMessage], None],
+) -> None:
+    async with client.stream("GET", url, params=params, headers=headers) as resp:
+        resp.raise_for_status()
+        event_type = None
+        async for line in resp.aiter_lines():
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith("event:"):
+                event_type = line[6:].strip()
+            elif line.startswith("data:") and event_type:
+                data_str = line[5:].strip()
+                try:
+                    data = json.loads(data_str)
+                    msg = parse_message(data)
+                    if msg:
+                        asyncio.create_task(safe_callback(on_message, msg))
+                except json.JSONDecodeError:
+                    pass
+                event_type = None
+
+
 class NameResolver:
     """session_id → 显示名称 的映射管理器
 
@@ -72,7 +102,7 @@ class WeFlowClient:
     async def _request(self, method: str, path: str, **kwargs) -> dict:
         url = f"{self.base_url}{path}"
         headers = {**self._headers, **kwargs.pop("headers", {})}
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=30, trust_env=False) as client:
             resp = await client.request(method, url, headers=headers, **kwargs)
             resp.raise_for_status()
             return resp.json()
@@ -153,26 +183,26 @@ class WeFlowClient:
         logger.info(f"连接 WeFlow SSE: {url}")
         while True:
             try:
-                async with httpx.AsyncClient(timeout=None) as client:
-                    async with client.stream("GET", url, params=params, headers=self._headers) as resp:
-                        resp.raise_for_status()
-                        event_type = None
-                        async for line in resp.aiter_lines():
-                            line = line.strip()
-                            if not line:
-                                continue
-                            if line.startswith("event:"):
-                                event_type = line[6:].strip()
-                            elif line.startswith("data:") and event_type:
-                                data_str = line[5:].strip()
-                                try:
-                                    data = json.loads(data_str)
-                                    msg = self._parse_sse_message(data)
-                                    if msg:
-                                        asyncio.create_task(self._safe_callback(on_message, msg))
-                                except json.JSONDecodeError:
-                                    pass
-                                event_type = None
+                async with httpx.AsyncClient(timeout=None, trust_env=False) as client:
+                    await _stream_sse_once(
+                        client,
+                        url,
+                        params,
+                        self._headers,
+                        self._parse_sse_message,
+                        self._safe_callback,
+                        on_message,
+                    )
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 403:
+                    logger.error(
+                        "WeFlow SSE 被拒绝: /api/v1/push/messages 返回 403。"
+                        "普通 API 已可用不代表主动推送已开启；请在 WeFlow 中开启主动推送/消息推送，"
+                        "并确认 httpApiToken 与 wechat-cli 配置一致。5秒后重试..."
+                    )
+                else:
+                    logger.error(f"SSE 错误: {e}，5秒后重试...")
+                await asyncio.sleep(5)
             except (httpx.ConnectError, httpx.ReadTimeout) as e:
                 logger.warning(f"SSE 连接断开: {e}，5秒后重试...")
                 await asyncio.sleep(5)
