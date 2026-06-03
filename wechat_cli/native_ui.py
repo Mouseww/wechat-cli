@@ -174,12 +174,12 @@ def _click(x: int, y: int) -> None:
     automation.Click(x, y)
 
 class NativeWeChatUI:
-    SEARCH_BOX_TIMEOUT = 0.2
-    HOTKEY_WAKE_DELAY = 0.15
-    SEARCH_OPEN_DELAY = 0.03
-    TARGET_PASTE_DELAY = 0.04
-    TARGET_SELECT_DELAY = 1.0
-    INPUT_FOCUS_DELAY = 0.02
+    SEARCH_BOX_TIMEOUT = 0.3
+    HOTKEY_WAKE_DELAY = 0.3
+    SEARCH_OPEN_DELAY = 0.2
+    TARGET_PASTE_DELAY = 0.2
+    TARGET_SELECT_DELAY = 1.2
+    INPUT_FOCUS_DELAY = 0.2
 
     def __init__(self, hotkey="{Ctrl}{Alt}w", progress: ProgressCallback = None):
         self.hotkey = hotkey
@@ -310,9 +310,12 @@ class NativeWeChatUI:
             time.sleep(0.05)
             
             _set_clipboard(content)
-            time.sleep(0.05)  # 留一点时间给操作系统的剪贴板同步
+            time.sleep(0.1)  # 留一点时间给操作系统的剪贴板同步
             _send_keys("{Ctrl}v")
             self._mark("粘贴消息内容", started_at)
+            
+            # 模拟人类粘贴后的一点点阅读/反应时间，避免被判定为机器人的极端快速操作
+            time.sleep(0.5)
             
             # 3. 发送
             _send_keys("{Enter}")

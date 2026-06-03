@@ -83,6 +83,7 @@ class AgentBridge:
         self._hakimi_next_offset = 0
         self._active_traces: Dict[str, dict] = {}
         self._send_lock = asyncio.Lock()
+        self._pending_sends: List[dict] = []
 
     async def start(self):
         """启动桥接器"""
@@ -278,9 +279,7 @@ class AgentBridge:
     # ── 消息过滤 ──────────────────────────────────────────────
     def _should_process(self, msg: WeChatMessage) -> bool:
         """判断消息是否需要处理"""
-        # 忽略自己发的消息
-        if msg.is_self:
-            return False
+        # 忽略自己发出的消息，但注意上方拦截过了如果作为验证回执会被处理
 
         # 白名单过滤（支持 wxid 和显示名称）
         if self.config.listen_sessions:
@@ -302,6 +301,15 @@ class AgentBridge:
         if self.config.listen_keywords:
             if not any(kw in msg.content for kw in self.config.listen_keywords):
                 return False
+
+        # 验证回执（针对本机自己发出的消息）
+        if msg.is_self:
+            for pending in list(self._pending_sends):
+                if pending["to"] in (msg.session_id, msg.session_name, msg.reply_target) and pending["content"] in msg.content:
+                    if not pending["future"].done():
+                        pending["future"].set_result(True)
+                        self._pending_sends.remove(pending)
+            return False
 
         # 去重
         import hashlib
@@ -495,6 +503,22 @@ class AgentBridge:
 
                 try:
                     success = await asyncio.wait_for(native_send_handler(req.to, req.content, progress=progress), timeout=15.0)
+                    if success:
+                        # 发送命令执行成功后，挂起一个 Future 验证回执，但如果超时只告警不再重试，防止因 WeFlow 推送慢导致重复发送
+                        verify_future = asyncio.get_event_loop().create_future()
+                        pending_item = {"to": req.to, "content": req.content, "future": verify_future}
+                        self._pending_sends.append(pending_item)
+                        # 让验证在后台进行，不要阻塞当前的返回，避免延迟气泡响应时间
+                        async def _verify():
+                            try:
+                                await asyncio.wait_for(verify_future, timeout=5.0)
+                                logger.info("trace=%s Bridge 验证成功: WeFlow 确认消息已在微信上发出", trace_id)
+                            except asyncio.TimeoutError:
+                                logger.warning("trace=%s Bridge 验证超时(5s): 消息已通过原生键盘敲击发出，但WeFlow暂未推回自己的回显。", trace_id)
+                            finally:
+                                if pending_item in self._pending_sends:
+                                    self._pending_sends.remove(pending_item)
+                        asyncio.create_task(_verify())
                 except asyncio.TimeoutError:
                     logger.error("trace=%s Bridge 发送超时(15s): to=%s content=%s", trace_id, req.to, req.content[:120])
                     success = False
