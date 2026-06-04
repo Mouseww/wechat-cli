@@ -24,7 +24,6 @@ from .models import (
     SendResponse,
 )
 from .weflow_client import WeFlowClient
-from .easychat_client import EasyChatClient
 from .native_ui import native_send_handler
 from .db_reader import WeChatDBReader
 from .key_extractor import get_key
@@ -61,7 +60,6 @@ class AgentBridge:
     def __init__(self, config: ServerConfig):
         self.config = config
         self.weflow = WeFlowClient(config.weflow_url, config.weflow_token)
-        self.easychat = EasyChatClient()
         self.db_reader = None
         self.msg_buffer = MessageBuffer()
         self._running = False
@@ -117,15 +115,9 @@ class AgentBridge:
         if send_driver == "native":
             logger.info("✓ 原生 UI 发送通道使用内置驱动")
         else:
-            # ★ 预加载会话名称映射（wxid → 显示名称）
+            # 预加载会话名称映射（wxid → 显示名称）
             await self.weflow.preload_names()
-
-            # 初始化 easyChat
-            await self.easychat.initialize()
-            if self.easychat.available:
-                logger.info("✓ easyChat 发送通道就绪")
-            else:
-                logger.warning("⚠ easyChat 不可用，只能读取消息，无法发送回复")
+            logger.info("✓ WeFlow 名称映射已加载")
 
         # 启动 SSE 订阅
         logger.info("开始监听新消息...")
@@ -180,7 +172,13 @@ class AgentBridge:
 
     def resolve_reply_target(self, chat_id: str) -> str:
         """将 Hakimi chat_id 解析为微信发送通道需要的显示名称。"""
-        return self._reply_targets.get(chat_id) or self.weflow.name_resolver.resolve(chat_id)
+        # 如果缓存里有，直接使用；否则交给 weflow 的映射解析器
+        resolved = self._reply_targets.get(chat_id)
+        if resolved:
+            return resolved
+        if hasattr(self, "weflow") and hasattr(self.weflow, "name_resolver"):
+            return self.weflow.name_resolver.resolve(chat_id)
+        return chat_id
 
     def _build_trace_id(self, msg: WeChatMessage) -> str:
         raw_id = msg.message_id or str(int(time.time() * 1000))
@@ -517,4 +515,7 @@ class AgentBridge:
                     message="发送成功" if success else "发送失败",
                     error=None if success else "原生 UI 驱动发送失败"
                 )
-            return await self.easychat.send_message(req)
+            return SendResponse(
+                success=False,
+                error=f"不支持的发送驱动: {self.config.effective_send_driver}"
+            )

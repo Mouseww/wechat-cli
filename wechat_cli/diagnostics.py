@@ -86,7 +86,6 @@ def get_native_driver_status(configured_db_path: Optional[str] = None) -> dict:
         is_windows
         and wechat_running
         and dependencies["pyperclip"]
-        and dependencies["uiautomation"]
     )
     read_ready = (
         is_windows

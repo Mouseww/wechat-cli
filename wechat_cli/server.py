@@ -26,7 +26,6 @@ from .models import (
     WeChatMessage, AgentResponse, MessageType,
 )
 from .weflow_client import WeFlowClient
-from .easychat_client import EasyChatClient
 from .agent_bridge import AgentBridge
 from .diagnostics import get_native_driver_status
 from .hakimi_stream import HakimiStreamBuffer
@@ -264,7 +263,7 @@ def create_app(config: ServerConfig) -> FastAPI:
             native_status = get_native_driver_status(config.wechat_data_path)
             weflow_ok = await bridge.weflow.health() if read_driver == "weflow" else False
             read_ready = native_status["read_ready"] if read_driver == "native" else weflow_ok
-            send_ready = native_status["send_ready"] if send_driver == "native" else bridge.easychat.available
+            send_ready = native_status["send_ready"] if send_driver == "native" else False
             ready = read_ready and send_ready
             return {
                 "status": "ok" if ready else "degraded",

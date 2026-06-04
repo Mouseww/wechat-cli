@@ -22,6 +22,10 @@ class StreamState:
     idle_task: Optional[asyncio.Task] = None
     started_at: float = 0.0
     updated_at: float = 0.0
+    flush_lock: Optional[asyncio.Lock] = None
+
+    def __post_init__(self):
+        self.flush_lock = asyncio.Lock()
 
 
 class HakimiStreamBuffer:
@@ -69,8 +73,6 @@ class HakimiStreamBuffer:
             return 0
 
         now = time.perf_counter()
-        state.text = text
-        state.updated_at = now
         logger.info(
             "trace=%s Hakimi 流式更新: message_id=%s chat_id=%s chars=%d since_stream_start=%.3fs since_poll=%s",
             state.trace.get("trace_id", "-"),
@@ -80,9 +82,18 @@ class HakimiStreamBuffer:
             now - state.started_at,
             self._format_since(state.trace, "polled_at", now),
         )
-        if state.flushed_until > len(text):
-            state.flushed_until = 0
-        flushed = await self._flush_complete_paragraphs(state)
+        # 在获取锁之前取消旧的 idle task，防止它在我们等锁期间触发
+        if state.idle_task and not state.idle_task.done():
+            state.idle_task.cancel()
+        async with state.flush_lock:
+            # 必须在锁内修改 text 和 flushed_until，
+            # 否则并发的 flush_message 会读到新 text + 旧 flushed_until，
+            # 把旧尾段和新内容混在一起发出，导致重复
+            state.text = text
+            state.updated_at = now
+            if state.flushed_until > len(text):
+                state.flushed_until = 0
+            flushed = await self._flush_complete_paragraphs(state)
         self._schedule_idle_flush(message_id)
         return flushed
 
@@ -90,24 +101,27 @@ class HakimiStreamBuffer:
         state = self._states.get(message_id)
         if state is None:
             return 0
-        if state.idle_task and not state.idle_task.done():
+        # 只取消 idle task 当它不是当前正在执行的任务时，避免自我取消导致消息永远不发送
+        current = asyncio.current_task()
+        if state.idle_task and not state.idle_task.done() and state.idle_task is not current:
             state.idle_task.cancel()
-        segment = state.text[state.flushed_until :].strip()
-        if not segment:
+        async with state.flush_lock:
+            segment = state.text[state.flushed_until :].strip()
+            if not segment:
+                return 0
+            if await self._send_segment(state.chat_id, segment, state.trace):
+                state.flushed_until = len(state.text)
+                logger.info(
+                    "trace=%s Hakimi 流式尾段发送: message_id=%s chat_id=%s chars=%d since_stream_start=%.3fs since_receive=%s",
+                    state.trace.get("trace_id", "-"),
+                    message_id,
+                    state.chat_id,
+                    len(segment),
+                    time.perf_counter() - state.started_at,
+                    self._format_since(state.trace, "received_at"),
+                )
+                return 1
             return 0
-        if await self._send_segment(state.chat_id, segment, state.trace):
-            state.flushed_until = len(state.text)
-            logger.info(
-                "trace=%s Hakimi 流式尾段发送: message_id=%s chat_id=%s chars=%d since_stream_start=%.3fs since_receive=%s",
-                state.trace.get("trace_id", "-"),
-                message_id,
-                state.chat_id,
-                len(segment),
-                time.perf_counter() - state.started_at,
-                self._format_since(state.trace, "received_at"),
-            )
-            return 1
-        return 0
 
     async def _flush_complete_paragraphs(self, state: StreamState) -> int:
         flushed = 0
