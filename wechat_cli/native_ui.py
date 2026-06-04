@@ -64,12 +64,11 @@ class Win32Window:
 
 def _window_text(hwnd: int) -> str:
     user32 = ctypes.windll.user32
-    length = user32.GetWindowTextLengthW(hwnd)
-    buffer = ctypes.create_unicode_buffer(length + 1)
-    user32.GetWindowTextW(hwnd, buffer, length + 1)
-    return buffer.value
-
-
+    buffer = ctypes.create_unicode_buffer(256)
+    result = user32.SendMessageTimeoutW(hwnd, 0x000D, 256, buffer, 0x0002, 100, ctypes.byref(ctypes.c_ulong(0)))
+    if result:
+        return buffer.value
+    return ""
 def _class_name(hwnd: int) -> str:
     buffer = ctypes.create_unicode_buffer(256)
     ctypes.windll.user32.GetClassNameW(hwnd, buffer, len(buffer))
@@ -88,20 +87,17 @@ def _find_wechat_window_win32() -> Optional[Win32Window]:
             if not user32.IsWindowVisible(hwnd):
                 return True
             class_name = _class_name(hwnd)
-            title = _window_text(hwnd)
             if class_name == "WeChatMainWndForPC":
                 matches.append(hwnd)
                 return False
-            if class_name == "Qt51514QWindowIcon" and "微信" in title:
-                matches.append(hwnd)
-                return False
-            if "微信" == title.strip():
-                matches.append(hwnd)
-                return False
+            if class_name == "Qt51514QWindowIcon":
+                title = _window_text(hwnd)
+                if "微信" in title:
+                    matches.append(hwnd)
+                    return False
         except Exception:
             pass
         return True
-
     callback = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)(enum_proc)
     user32.EnumWindows(callback, 0)
     return Win32Window(matches[0]) if matches else None
