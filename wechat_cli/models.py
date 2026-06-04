@@ -115,6 +115,20 @@ class ServerConfig(BaseModel):
     use_native_driver: bool = False
     wechat_data_path: Optional[str] = None # 自动检测
     wechat_hotkey: str = "{Ctrl}{Alt}w"
+    # Agent 提示词
+    agent_system_prompt: str = Field(
+        default="你是一个智能微信助手。用户通过微信给你发消息，你需要简洁、友好地回复。\n回复要简短自然，像微信聊天一样，不要使用 markdown 格式。\n如果消息不需要回复（比如纯表情、已读内容等），返回 [SKIP]。",
+        description="私聊 System Prompt",
+    )
+    agent_group_prompt: str = Field(
+        default="你是一个群聊中的智能助手。只有当有人明确向你提问或需要帮助时才回复。\n回复要简洁。如果消息不需要你回复，返回 [SKIP]。",
+        description="群聊 System Prompt",
+    )
+    agent_model: str = Field(default="gpt-4o-mini", description="LLM 模型名称")
+    agent_base_url: str = Field(default="https://api.openai.com/v1", description="OpenAI 兼容 API Base URL")
+    agent_temperature: float = Field(default=0.7, description="LLM 温度参数")
+    agent_max_tokens: int = Field(default=500, description="LLM 最大回复 token 数")
+    agent_max_history: int = Field(default=20, description="对话历史最大轮数")
     # 过滤规则
     listen_sessions: Optional[List[str]] = Field(default=None, description="监听的会话白名单（填wxid或显示名称均可）")
     ignore_sessions: Optional[List[str]] = Field(default=None, description="忽略的会话黑名单")

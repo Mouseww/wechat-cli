@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WeChat CLI · 控制面板</title>
+<style>
+:root {
+  --bg-primary: #0a0e14;
+  --bg-secondary: #111820;
+  --bg-card: #151d27;
+  --bg-input: #0d1219;
+  --border: #1e2a38;
+  --border-focus: #3d9aff;
+  --text-primary: #e6edf5;
+  --text-secondary: #7a8a9e;
+  --text-muted: #4a5a6e;
+  --accent: #3d9aff;
+  --accent-dim: #2a6fbd;
+  --success: #3dd68c;
+  --warning: #f5a623;
+  --danger: #ff5757;
+  --radius: 8px;
+  --shadow: 0 2px 12px rgba(0,0,0,0.3);
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* ─── Header ─── */
+.header {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(10px);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, var(--accent), #7c5aff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.logo-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ─── Layout ─── */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 32px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.grid-full {
+  grid-column: 1 / -1;
+}
+
+/* ─── Status Bar ─── */
+.status-bar {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 13px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.status-dot.active { background: var(--success); }
+.status-dot.warning { background: var(--warning); }
+.status-dot.error { background: var(--danger); }
+.status-dot.loading {
+  background: var(--accent);
+  animation: pulse 1.2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ─── Cards ─── */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  transition: border-color 0.2s;
+}
+
+.card:hover {
+  border-color: #2a3a4e;
+}
+
+.card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title::before {
+  content: '';
+  width: 3px;
+  height: 16px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+/* ─── Forms ─── */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group:last-child {
+  margin-bottom: 0;
+}
+
+.form-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  font-family: var(--font-mono);
+}
+
+.form-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="password"],
+select,
+textarea {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: var(--font-mono);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(61, 154, 255, 0.1);
+}
+
+select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%237a8a9e'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* ─── Toggle Switch ─── */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.toggle-row:last-child {
+  border-bottom: none;
+}
+
+.toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toggle-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.toggle-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: var(--border);
+  border-radius: 12px;
+  transition: 0.3s;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  bottom: 3px;
+  background: var(--text-secondary);
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+.toggle input:checked + .toggle-slider {
+  background: var(--accent);
+}
+
+.toggle input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+  background: white;
+}
+
+/* ─── Buttons ─── */
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #4da6ff;
+  box-shadow: 0 4px 12px rgba(61, 154, 255, 0.3);
+}
+
+.btn-secondary {
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  border-color: var(--text-muted);
+  background: var(--bg-secondary);
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+.btn-danger:hover {
+  background: var(--danger);
+  color: white;
+}
+
+.btn-success {
+  background: var(--success);
+  color: #0a0e14;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── Tags Input ─── */
+.tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  min-height: 40px;
+  cursor: text;
+}
+
+.tags-container:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(61, 154, 255, 0.1);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: var(--accent-dim);
+  color: white;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+
+.tag-remove {
+  cursor: pointer;
+  opacity: 0.7;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.tag-remove:hover { opacity: 1; }
+
+.tags-input {
+  border: none !important;
+  background: transparent !important;
+  padding: 2px !important;
+  min-width: 120px;
+  flex: 1;
+  font-size: 13px;
+  box-shadow: none !important;
+}
+
+/* ─── Toast ─── */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toast {
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  animation: slideIn 0.3s ease;
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+}
+
+.toast-success {
+  background: rgba(61, 214, 140, 0.15);
+  border: 1px solid var(--success);
+  color: var(--success);
+}
+
+.toast-error {
+  background: rgba(255, 87, 87, 0.15);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+}
+
+.toast-info {
+  background: rgba(61, 154, 255, 0.15);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* ─── Footer ─── */
+.footer {
+  margin-top: 40px;
+  padding: 20px 0;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 768px) {
+  .grid { grid-template-columns: 1fr; }
+  .container { padding: 16px; }
+  .header { padding: 12px 16px; }
+  .status-bar { gap: 8px; }
+}
+
+/* ─── Animations ─── */
+.fade-in {
+  animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Section spacing ─── */
+.section {
+  margin-bottom: 24px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <div>
+      <div class="logo">WeChat CLI</div>
+      <div class="logo-sub">v0.1.0 · 控制面板</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-secondary btn-sm" onclick="refreshStatus()">⟳ 刷新状态</button>
+    <button class="btn btn-primary btn-sm" onclick="saveConfig()">💾 保存配置</button>
+  </div>
+</header>
+
+<div class="container">
+  <!-- Status Bar -->
+  <div class="status-bar" id="statusBar">
+    <div class="status-badge">
+      <span class="status-dot loading" id="dotWeflow"></span>
+      <span id="lblWeflow">WeFlow: 检测中...</span>
+    </div>
+    <div class="status-badge">
+      <span class="status-dot loading" id="dotWechat"></span>
+      <span id="lblWechat">微信进程: 检测中...</span>
+    </div>
+    <div class="status-badge">
+      <span class="status-dot loading" id="dotAgent"></span>
+      <span id="lblAgent">Agent: 检测中...</span>
+    </div>
+    <div class="status-badge">
+      <span class="status-dot" id="dotConfig"></span>
+      <span id="lblConfig">配置文件: -</span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- ─── 服务配置 ─── -->
+    <div class="card fade-in">
+      <div class="card-title">服务配置</div>
+      <div class="form-group">
+        <label class="form-label">host</label>
+        <input type="text" id="cfg-host" placeholder="127.0.0.1">
+        <div class="form-hint">API 服务监听地址</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">port</label>
+        <input type="number" id="cfg-port" placeholder="5032">
+        <div class="form-hint">API 服务监听端口</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">log_level</label>
+        <select id="cfg-log_level">
+          <option value="DEBUG">DEBUG</option>
+          <option value="INFO">INFO</option>
+          <option value="WARNING">WARNING</option>
+          <option value="ERROR">ERROR</option>
+        </select>
+        <div class="form-hint">日志级别</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">reply_delay_ms</label>
+        <input type="number" id="cfg-reply_delay_ms" placeholder="500">
+        <div class="form-hint">自动回复延迟（毫秒），模拟人工打字</div>
+      </div>
+    </div>
+
+    <!-- ─── WeFlow 配置 ─── -->
+    <div class="card fade-in">
+      <div class="card-title">WeFlow 消息读取</div>
+      <div class="form-group">
+        <label class="form-label">weflow_url</label>
+        <input type="text" id="cfg-weflow_url" placeholder="http://127.0.0.1:5031">
+        <div class="form-hint">WeFlow API 地址</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">weflow_token</label>
+        <input type="password" id="cfg-weflow_token" placeholder="留空则不使用认证">
+        <div class="form-hint">WeFlow API Token（可选）</div>
+      </div>
+      <div style="margin-top: 12px;">
+        <button class="btn btn-secondary btn-sm" onclick="testWeflow()">🔗 测试连接</button>
+        <span id="weflowTestResult" style="margin-left: 8px; font-size: 12px;"></span>
+      </div>
+    </div>
+
+    <!-- ─── 驱动配置 ─── -->
+    <div class="card fade-in">
+      <div class="card-title">驱动通道</div>
+      <div class="form-group">
+        <label class="form-label">read_driver</label>
+        <select id="cfg-read_driver">
+          <option value="weflow">weflow - WeFlow API 读取消息</option>
+          <option value="native">native - 原生数据库读取</option>
+        </select>
+        <div class="form-hint">消息读取通道</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">send_driver</label>
+        <select id="cfg-send_driver">
+          <option value="native">native - 原生 UI 自动化发送</option>
+          <option value="easychat">easychat - easyChat 插件发送</option>
+        </select>
+        <div class="form-hint">消息发送通道</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">wechat_data_path</label>
+        <input type="text" id="cfg-wechat_data_path" placeholder="自动检测">
+        <div class="form-hint">微信数据目录（留空自动检测）</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">wechat_hotkey</label>
+        <input type="text" id="cfg-wechat_hotkey" placeholder="{Ctrl}{Alt}w">
+        <div class="form-hint">唤起微信窗口的快捷键</div>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <span class="toggle-label">兼容模式</span>
+          <span class="toggle-desc">use_native_driver: 强制使用原生驱动（覆盖 read_driver/send_driver）</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="cfg-use_native_driver">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- ─── AI Agent 完整配置 ─── -->
+    <div class="card fade-in grid-full">
+      <div class="card-title">AI Agent</div>
+      <div class="grid" style="gap: 16px;">
+        <!-- 连接配置 -->
+        <div class="form-group">
+          <label class="form-label">agent_webhook</label>
+          <input type="text" id="cfg-agent_webhook" placeholder="http://localhost:8000/webhook">
+          <div class="form-hint">AI Agent 回调 URL</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">agent_api_key</label>
+          <input type="password" id="cfg-agent_api_key" placeholder="Agent API Key（可选）">
+          <div class="form-hint">Agent 认证密钥</div>
+        </div>
+        <!-- 模型配置 -->
+        <div class="form-group">
+          <label class="form-label">agent_model</label>
+          <input type="text" id="cfg-agent_model" placeholder="gpt-4o-mini">
+          <div class="form-hint">LLM 模型名称（如 gpt-4o-mini, qwen2.5:7b, claude-3-haiku 等）</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">agent_base_url</label>
+          <input type="text" id="cfg-agent_base_url" placeholder="https://api.openai.com/v1">
+          <div class="form-hint">OpenAI 兼容 API 地址（Ollama: http://localhost:11434/v1）</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">agent_temperature</label>
+          <input type="number" id="cfg-agent_temperature" step="0.1" min="0" max="2" placeholder="0.7">
+          <div class="form-hint">生成温度 (0=确定性, 1=创造性, 2=随机)</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">agent_max_tokens</label>
+          <input type="number" id="cfg-agent_max_tokens" min="50" max="4096" placeholder="500">
+          <div class="form-hint">单次回复最大 token 数</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">agent_max_history</label>
+          <input type="number" id="cfg-agent_max_history" min="0" max="100" placeholder="20">
+          <div class="form-hint">发送给 LLM 的对话历史最大轮数</div>
+        </div>
+        <div class="form-group">
+          <div class="toggle-row" style="border: none; padding: 0;">
+            <div class="toggle-info">
+              <span class="toggle-label">自动回复</span>
+              <span class="toggle-desc">收到消息时自动转发给 Agent 并回复</span>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="cfg-auto_reply_enabled">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <!-- 提示词 -->
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label class="form-label">agent_system_prompt（私聊）</label>
+          <textarea id="cfg-agent_system_prompt" rows="5"
+                    placeholder="你是一个智能微信助手。用户通过微信给你发消息，你需要简洁、友好地回复。"></textarea>
+          <div class="form-hint">私聊场景下的 System Prompt，定义 Agent 的角色与行为</div>
+        </div>
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label class="form-label">agent_group_prompt（群聊）</label>
+          <textarea id="cfg-agent_group_prompt" rows="5"
+                    placeholder="你是一个群聊中的智能助手。只有当有人明确向你提问或需要帮助时才回复。"></textarea>
+          <div class="form-hint">群聊场景下的 System Prompt，通常更保守，避免刷屏</div>
+        </div>
+      </div>
+      <div style="margin-top: 16px;">
+        <button class="btn btn-secondary btn-sm" onclick="testAgent()">🤖 测试 Agent</button>
+        <span id="agentTestResult" style="margin-left: 8px; font-size: 12px;"></span>
+      </div>
+    </div>
+
+    <!-- ─── 过滤规则 ─── -->
+    <div class="card fade-in grid-full">
+      <div class="card-title">消息过滤规则</div>
+      <div class="grid" style="gap: 16px;">
+        <div class="form-group">
+          <label class="form-label">listen_sessions（白名单）</label>
+          <div class="tags-container" id="tags-listen_sessions" onclick="focusTagInput(this)">
+            <input type="text" class="tags-input" placeholder="输入会话名称后回车添加..."
+                   onkeydown="handleTagKey(event, 'listen_sessions')">
+          </div>
+          <div class="form-hint">仅监听这些会话（wxid 或显示名称），留空则监听所有</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">ignore_sessions（黑名单）</label>
+          <div class="tags-container" id="tags-ignore_sessions" onclick="focusTagInput(this)">
+            <input type="text" class="tags-input" placeholder="输入会话名称后回车添加..."
+                   onkeydown="handleTagKey(event, 'ignore_sessions')">
+          </div>
+          <div class="form-hint">忽略这些会话的消息</div>
+        </div>
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label class="form-label">listen_keywords（关键词触发）</label>
+          <div class="tags-container" id="tags-listen_keywords" onclick="focusTagInput(this)">
+            <input type="text" class="tags-input" placeholder="输入关键词后回车添加..."
+                   onkeydown="handleTagKey(event, 'listen_keywords')">
+          </div>
+          <div class="form-hint">仅包含这些关键词的消息才触发 Agent（留空则所有消息都触发）</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div style="display: flex; gap: 12px; margin-top: 24px; justify-content: space-between;">
+    <div style="display: flex; gap: 12px;">
+      <button class="btn btn-primary" onclick="saveConfig()">💾 保存所有配置</button>
+      <button class="btn btn-secondary" onclick="loadConfig()">⟳ 重新加载</button>
+    </div>
+    <button class="btn btn-danger btn-sm" onclick="resetConfig()">⚠ 重置为默认</button>
+  </div>
+
+  <div class="footer">
+    WeChat CLI · WebUI · 配置文件: <span id="configPath">-</span>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ─── Toast 通知 ───
+function showToast(msg, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = msg;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 3500);
+}
+
+// ─── Tags 管理 ───
+const tagsData = {
+  listen_sessions: [],
+  ignore_sessions: [],
+  listen_keywords: [],
+};
+
+function renderTags(field) {
+  const container = document.getElementById(`tags-${field}`);
+  const input = container.querySelector('.tags-input');
+  // 移除旧 tags
+  container.querySelectorAll('.tag').forEach(t => t.remove());
+  // 重新渲染
+  tagsData[field].forEach((val, idx) => {
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.innerHTML = `${escapeHtml(val)}<span class="tag-remove" onclick="removeTag('${field}', ${idx})">×</span>`;
+    container.insertBefore(tag, input);
+  });
+}
+
+function addTag(field, value) {
+  const trimmed = value.trim();
+  if (trimmed && !tagsData[field].includes(trimmed)) {
+    tagsData[field].push(trimmed);
+    renderTags(field);
+  }
+}
+
+function removeTag(field, idx) {
+  tagsData[field].splice(idx, 1);
+  renderTags(field);
+}
+
+function handleTagKey(e, field) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    addTag(field, e.target.value);
+    e.target.value = '';
+  } else if (e.key === 'Backspace' && !e.target.value && tagsData[field].length > 0) {
+    tagsData[field].pop();
+    renderTags(field);
+  }
+}
+
+function focusTagInput(container) {
+  container.querySelector('.tags-input').focus();
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ─── 配置加载 ───
+async function loadConfig() {
+  try {
+    const resp = await fetch('/api/config');
+    const data = await resp.json();
+
+    // 文本/数字字段
+    const fields = ['host', 'port', 'weflow_url', 'weflow_token', 'agent_webhook',
+                    'agent_api_key', 'log_level', 'reply_delay_ms', 'read_driver',
+                    'send_driver', 'wechat_data_path', 'wechat_hotkey',
+                    'agent_system_prompt', 'agent_group_prompt', 'agent_model',
+                    'agent_base_url', 'agent_temperature', 'agent_max_tokens', 'agent_max_history'];
+    fields.forEach(f => {
+      const el = document.getElementById(`cfg-${f}`);
+      if (el) {
+        // 密码字段：如果设置了但未返回明文，不更新
+        if (el.type === 'password' && data[`_${f}_set`] && !data[f]) {
+          el.placeholder = '••••••••（已设置）';
+        } else {
+          el.value = data[f] ?? '';
+        }
+      }
+    });
+
+    // 布尔字段
+    ['auto_reply_enabled', 'use_native_driver'].forEach(f => {
+      const el = document.getElementById(`cfg-${f}`);
+      if (el) el.checked = !!data[f];
+    });
+
+    // Tags 字段
+    ['listen_sessions', 'ignore_sessions', 'listen_keywords'].forEach(f => {
+      tagsData[f] = data[f] || [];
+      renderTags(f);
+    });
+
+    // 配置路径
+    document.getElementById('configPath').textContent = data._config_path || '-';
+
+    showToast('配置已加载', 'success');
+  } catch (e) {
+    showToast('加载配置失败: ' + e.message, 'error');
+  }
+}
+
+// ─── 配置保存 ───
+async function saveConfig() {
+  const payload = {};
+
+  // 文本字段
+  const textFields = ['host', 'weflow_url', 'agent_webhook', 'wechat_data_path', 'wechat_hotkey',
+                      'agent_model', 'agent_base_url'];
+  textFields.forEach(f => {
+    const val = document.getElementById(`cfg-${f}`).value.trim();
+    if (val) payload[f] = val;
+  });
+
+  // 提示词字段（允许空值以恢复默认）
+  ['agent_system_prompt', 'agent_group_prompt'].forEach(f => {
+    const val = document.getElementById(`cfg-${f}`).value;
+    if (val.trim()) payload[f] = val;
+  });
+
+  // 密码字段（仅非空时更新）
+  ['weflow_token', 'agent_api_key'].forEach(f => {
+    const val = document.getElementById(`cfg-${f}`).value.trim();
+    if (val) payload[f] = val;
+  });
+
+  // 数字字段
+  const port = document.getElementById('cfg-port').value;
+  if (port) payload.port = parseInt(port);
+  const delay = document.getElementById('cfg-reply_delay_ms').value;
+  if (delay) payload.reply_delay_ms = parseInt(delay);
+  const temp = document.getElementById('cfg-agent_temperature').value;
+  if (temp) payload.agent_temperature = parseFloat(temp);
+  const maxTokens = document.getElementById('cfg-agent_max_tokens').value;
+  if (maxTokens) payload.agent_max_tokens = parseInt(maxTokens);
+  const maxHistory = document.getElementById('cfg-agent_max_history').value;
+  if (maxHistory) payload.agent_max_history = parseInt(maxHistory);
+
+  // Select 字段
+  payload.log_level = document.getElementById('cfg-log_level').value;
+  payload.read_driver = document.getElementById('cfg-read_driver').value;
+  payload.send_driver = document.getElementById('cfg-send_driver').value;
+
+  // 布尔字段
+  payload.auto_reply_enabled = document.getElementById('cfg-auto_reply_enabled').checked;
+  payload.use_native_driver = document.getElementById('cfg-use_native_driver').checked;
+
+  // Tags 字段
+  payload.listen_sessions = tagsData.listen_sessions.length ? tagsData.listen_sessions : null;
+  payload.ignore_sessions = tagsData.ignore_sessions.length ? tagsData.ignore_sessions : null;
+  payload.listen_keywords = tagsData.listen_keywords.length ? tagsData.listen_keywords : null;
+
+  try {
+    const resp = await fetch('/api/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const result = await resp.json();
+    if (result.success) {
+      showToast('✓ 配置已保存', 'success');
+    } else {
+      showToast('保存失败: ' + (result.message || '未知错误'), 'error');
+    }
+  } catch (e) {
+    showToast('保存失败: ' + e.message, 'error');
+  }
+}
+
+// ─── 重置配置 ───
+async function resetConfig() {
+  if (!confirm('确认要将所有配置重置为默认值吗？此操作不可撤销。')) return;
+  try {
+    const resp = await fetch('/api/config/reset', { method: 'POST' });
+    const result = await resp.json();
+    if (result.success) {
+      showToast('配置已重置', 'info');
+      await loadConfig();
+    }
+  } catch (e) {
+    showToast('重置失败: ' + e.message, 'error');
+  }
+}
+
+// ─── 状态刷新 ───
+async function refreshStatus() {
+  setStatusLoading();
+  try {
+    const resp = await fetch('/api/status');
+    const s = await resp.json();
+
+    // WeFlow
+    const dotWf = document.getElementById('dotWeflow');
+    const lblWf = document.getElementById('lblWeflow');
+    if (s.weflow_connected === null) {
+      dotWf.className = 'status-dot';
+      lblWf.textContent = 'WeFlow: 未使用';
+    } else if (s.weflow_connected) {
+      dotWf.className = 'status-dot active';
+      lblWf.textContent = 'WeFlow: 已连接';
+    } else {
+      dotWf.className = 'status-dot error';
+      lblWf.textContent = 'WeFlow: 未连接';
+    }
+
+    // 微信进程
+    const dotWx = document.getElementById('dotWechat');
+    const lblWx = document.getElementById('lblWechat');
+    if (s.wechat_running) {
+      dotWx.className = 'status-dot active';
+      lblWx.textContent = '微信: 运行中';
+    } else {
+      dotWx.className = 'status-dot error';
+      lblWx.textContent = '微信: 未运行';
+    }
+
+    // Agent
+    const dotAg = document.getElementById('dotAgent');
+    const lblAg = document.getElementById('lblAgent');
+    if (s.agent_connected === null) {
+      dotAg.className = 'status-dot';
+      lblAg.textContent = 'Agent: 未设置';
+    } else if (s.agent_connected) {
+      dotAg.className = 'status-dot active';
+      lblAg.textContent = 'Agent: 已连接';
+    } else {
+      dotAg.className = 'status-dot warning';
+      lblAg.textContent = 'Agent: 未响应';
+    }
+
+    // 配置
+    const dotCfg = document.getElementById('dotConfig');
+    const lblCfg = document.getElementById('lblConfig');
+    dotCfg.className = s.config_exists ? 'status-dot active' : 'status-dot warning';
+    lblCfg.textContent = `读取: ${s.effective_read_driver} / 发送: ${s.effective_send_driver}`;
+
+  } catch (e) {
+    showToast('状态刷新失败: ' + e.message, 'error');
+  }
+}
+
+function setStatusLoading() {
+  ['dotWeflow', 'dotWechat', 'dotAgent', 'dotConfig'].forEach(id => {
+    document.getElementById(id).className = 'status-dot loading';
+  });
+}
+
+// ─── 测试连接 ───
+async function testWeflow() {
+  const el = document.getElementById('weflowTestResult');
+  el.textContent = '测试中...';
+  el.style.color = 'var(--text-muted)';
+  try {
+    const resp = await fetch('/api/weflow/test', { method: 'POST' });
+    const r = await resp.json();
+    if (r.success) {
+      el.textContent = `✓ 连接成功 (${r.session_count || 0} 个会话)`;
+      el.style.color = 'var(--success)';
+    } else {
+      el.textContent = `✗ ${r.error || '连接失败'}`;
+      el.style.color = 'var(--danger)';
+    }
+  } catch (e) {
+    el.textContent = `✗ ${e.message}`;
+    el.style.color = 'var(--danger)';
+  }
+}
+
+async function testAgent() {
+  const el = document.getElementById('agentTestResult');
+  el.textContent = '测试中...';
+  el.style.color = 'var(--text-muted)';
+  try {
+    const resp = await fetch('/api/agent/test', { method: 'POST' });
+    const r = await resp.json();
+    if (r.success) {
+      el.textContent = `✓ Agent 响应正常`;
+      el.style.color = 'var(--success)';
+    } else {
+      el.textContent = `✗ ${r.error || 'HTTP ' + r.status_code}`;
+      el.style.color = 'var(--danger)';
+    }
+  } catch (e) {
+    el.textContent = `✗ ${e.message}`;
+    el.style.color = 'var(--danger)';
+  }
+}
+
+// ─── 初始化 ───
+document.addEventListener('DOMContentLoaded', () => {
+  loadConfig();
+  refreshStatus();
+});
+</script>
+</body>
+</html>

@@ -39,3 +39,6 @@ wechat-cli = "wechat_cli.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["wechat_cli*"]
+
+[tool.setuptools.package-data]
+wechat_cli = ["webui_assets/*.html"]

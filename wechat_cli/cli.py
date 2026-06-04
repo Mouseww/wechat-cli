@@ -659,6 +659,25 @@ def agent_disable():
 cli.add_command(agent)
 
 
+# ── webui: Web 配置管理界面 ──────────────────────────────────────
+@cli.command()
+@click.option("--host", default="127.0.0.1", help="WebUI 监听地址")
+@click.option("--port", "-p", type=int, default=5033, help="WebUI 监听端口")
+@click.option("--no-browser", is_flag=True, help="不自动打开浏览器")
+def webui(host, port, no_browser):
+    """启动 Web 配置管理界面
+
+    提供可视化的配置管理、状态监控和连接测试功能。
+    """
+    if not no_browser:
+        import webbrowser
+        import threading
+        threading.Timer(1.0, lambda: webbrowser.open(f"http://{host}:{port}")).start()
+
+    from .webui import run_webui
+    run_webui(host=host, port=port)
+
+
 def main():
     cli()
 
