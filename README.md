@@ -33,19 +33,24 @@
 
 ---
 
-## ✨ 为什么选择 WeChat CLI？
+## ✨ 项目定位
 
-| 痛点 | WeChat CLI 的解法 |
-|------|-------------------|
-| 📦 依赖多且重 | **内置原生驱动**，直接读取微信数据库 & 操作 UI，实现研究级的一键集成 |
-| 🔒 隐私泄露 | **本地提 Key**，不修改微信客户端，不连接第三方解密服务 |
-| 🤖 想让 AI 回复 | 内置 Agent Bridge，支持 **OpenAI / Claude / Ollama** 等任意 LLM |
-| ⚙️ 配置复杂 | CLI 一行命令搞定，也支持运行时热更新配置 |
+WeChat CLI 是一个运行在本机的微信 sidecar，用于把桌面微信接到 CLI、HTTP API 和 Agent 自动回复链路。
+
+| 场景 | 能力边界 |
+|------|----------|
+| 命令行查看微信数据 | 通过 WeFlow HTTP API 查询会话、联系人和历史消息 |
+| 命令行发送消息 | 通过 Windows 微信窗口执行 UI 自动化发送 |
+| 接入 AI Agent | 监听新消息，转发到 webhook，并按 Agent 返回结果回复 |
+| 接入 Hakimi | 提供 `clawbot` 兼容的 `/messages`、`/send_message`、`/edit_message` 端点 |
+| 本机安装 | `install.bat` 创建虚拟环境、安装依赖、检测 WeFlow 并写入默认配置 |
 
 ## 🚀 驱动模式说明
 
-- **Native Driver (研究用)**: 自动从微信进程提取密钥，直接解密读取 `MSG.db`。此模式旨在演示跨进程内存访问和数据库解密原理。
-- **Legacy Mode**: 兼容模式，支持通过第三方 API 服务进行交互。
+- **读取通道 `read_driver=weflow`（默认）**：`sessions`、`contacts`、`messages`、名称解析、SSE 新消息订阅和自动回复链路依赖 WeFlow HTTP API。
+- **发送通道 `send_driver=native`（默认）**：文本发送通过 Windows 微信主窗口完成，需要微信已登录、主窗口可见。
+
+默认组合是 `WeFlow 读取 + native 发送`。这两个能力是独立的：读取不可用时，UI 自动化发送仍可单独验证；发送可用也不代表 WeFlow 已配置完成。
 
 ## 📐 架构
 
@@ -59,15 +64,15 @@
 │  └────┬─────┘   └──────┬───────┘   └────────┬──────────┘   │
 │       │                │                     │              │
 │  ┌────┴────────────────┴─────────────────────┴───────────┐  │
-│  │         Native Driver (DB Reader + UI Sender)         │  │
-│  │        自动提 Key / 实时监听 / 原生 UI 自动化         │  │
+│  │       Driver Layer: WeFlow Reader + Native Sender      │  │
+│  │       会话/消息读取走 WeFlow，消息发送走微信 UI        │  │
 │  └────────────────────────┬───────────────────────────────┘  │
 └───────────────────────────┼─────────────────────────────────┘
 ```
 
 ## ⚡ 快速开始
 
-### 1. 安装
+### 1. 安装依赖
 
 Windows 推荐直接运行一键安装脚本。脚本会创建 `.venv`、安装 Python 依赖、检测 WeFlow；如果 WeFlow API 不可用，会自动下载并启动 WeFlow 安装程序。
 
@@ -83,6 +88,21 @@ cd wechat-cli
 powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
 ```
 
+安装脚本会写入默认配置：
+
+```powershell
+wechat-cli config set read_driver weflow
+wechat-cli config set send_driver native
+wechat-cli config set use_native_driver false
+wechat-cli config set weflow_url http://127.0.0.1:5031
+```
+
+如果全局命令暂不可用，可以直接使用虚拟环境入口：
+
+```powershell
+.\.venv\Scripts\python.exe -m wechat_cli.cli status
+```
+
 ### 2. 安装并启动 WeFlow
 
 完整环境需要同时运行 WeFlow。`sessions`、`contacts`、`messages`、名称解析、SSE 新消息订阅和自动回复链路都依赖 WeFlow HTTP API；仅 UI 自动化发送可以在读取通道不可用时单独工作。一键安装脚本会在检测不到 WeFlow API 时自动安装 WeFlow。
@@ -94,15 +114,15 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
 
 可用以下命令检查 WeFlow API：
 
-```bash
-curl http://127.0.0.1:5031/health
+```powershell
+curl.exe http://127.0.0.1:5031/health
 ```
 
 WeFlow API 文档参考：https://weflow.imsry.cn/api-reference
 
 ### 3. 配置与启动
 
-```bash
+```powershell
 # 默认读取使用 WeFlow，发送使用原生 UI 自动化
 wechat-cli config set read_driver weflow
 wechat-cli config set send_driver native
@@ -115,10 +135,21 @@ wechat-cli config set weflow_url http://127.0.0.1:5031
 wechat-cli status
 
 # 启动服务
-wechat-cli start
+wechat-cli start --log-level debug
+```
+WeChat CLI 本身也支持 AI 自动回复，可在 WebUI 中配置。
+
+服务默认监听 `http://127.0.0.1:5032`。启动时如果读取通道是 WeFlow，且 `weflow_url` 是本机地址，服务会尝试检测并拉起本机 WeFlow。
+
+健康检查：
+
+```powershell
+curl.exe http://127.0.0.1:5032/health
 ```
 
 ### 4. 接入 Hakimi 多会话 Gateway
+
+Hakimi 是一个本地优先的多 Agent 助手运行时，可把 CLI、浏览器、消息网关等入口统一接到多会话 Agent 工作流。仓库地址：https://github.com/Mouseww/hakimi-agent
 
 把微信作为 Hakimi 的聊天入口时，不要把所有微信消息转发到 Hakimi `/api/chat`；该接口是共享会话，容易让不同联系人串上下文。推荐让 Hakimi 使用已有的 `clawbot` HTTP bridge 模式轮询 `wechat-cli`：
 
@@ -166,18 +197,32 @@ Use the skill at skills/wechat-cli-installer to install the full WeChat CLI envi
 
 ## 🔧 CLI 命令大全
 
-```bash
-wechat-cli start                    启动服务
-wechat-cli status                   查看驱动状态与密钥信息
-wechat-cli send "张三" "你好"       原生驱动发送消息
+```powershell
+wechat-cli status                         查看读取/发送通道状态
+wechat-cli sessions --limit 10            查看最近会话
+wechat-cli contacts --limit 10            查看联系人
+wechat-cli messages "filehelper" --limit 5 查看历史消息
+wechat-cli send "文件传输助手" "测试发送" 发送文本消息
+wechat-cli webui                          打开 Web 配置界面
+wechat-cli start --log-level debug         启动 HTTP API 和 Agent Bridge
 ```
 
 Hakimi bridge 兼容端点：
 
-```bash
+```text
 GET  /messages       Hakimi 轮询微信入站消息
 POST /send_message   Hakimi 发送回复到微信
-POST /edit_message   兼容 Hakimi 编辑接口，当前为 no-op
+POST /edit_message   兼容 Hakimi 编辑式流式更新
+```
+
+通用 API：
+
+```text
+GET  /api/v1/sessions
+GET  /api/v1/contacts
+GET  /api/v1/messages?talker=<session_id>
+POST /api/v1/send
+GET  /api/v1/stats
 ```
 
 ## 🪟 Windows 微信 4.x 发送配置指南
@@ -188,13 +233,13 @@ POST /edit_message   兼容 Hakimi 编辑接口，当前为 no-op
 - 微信主窗口保持可见，不要最小化。
 - 已安装发送依赖：
 
-```bash
+```powershell
 pip install uiautomation pyperclip psutil
 ```
 
 ### 发送前检查
 
-```bash
+```powershell
 wechat-cli status
 ```
 
@@ -202,7 +247,7 @@ wechat-cli status
 
 ### 发送消息
 
-```bash
+```powershell
 wechat-cli send "文件传输助手" "测试发送"
 wechat-cli send "Webber" "测试发送"
 ```
@@ -218,6 +263,35 @@ wechat-cli send "Webber" "测试发送"
 3. 标题 `微信`
 
 如果 UIAutomation 无法识别微信内部输入框，驱动会在搜索并打开目标会话后，点击窗口底部输入区域作为回退路径，再粘贴并发送消息。
+
+## 🧩 WebUI 与 Agent 自动回复
+
+启动 WebUI：
+
+```powershell
+wechat-cli webui
+```
+
+默认地址是 `http://127.0.0.1:5033`，可配置 WeFlow URL、Token、读取/发送通道、Agent webhook、自动回复开关、白名单、黑名单和关键词。
+
+Webhook 示例：
+
+```powershell
+python agent_example.py
+wechat-cli agent set http://127.0.0.1:9000/webhook
+wechat-cli agent enable
+wechat-cli start --log-level debug
+```
+
+Agent 返回 `{"action":"reply","reply":"..."}` 时发送回复；返回 `{"action":"skip"}` 时跳过。
+
+## 🧯 排障优先级
+
+1. 先运行 `wechat-cli status`，确认读取通道和发送通道分别是否可用。
+2. 读不到会话或消息时，先检查 `curl.exe http://127.0.0.1:5031/health` 和 WeFlow 账号数据源配置。
+3. 发不出消息时，先保持 Windows 微信已登录、主窗口可见，再用 `wechat-cli send "文件传输助手" "测试发送"` 做最小验证。
+4. Hakimi 或 Agent 没有回复时，用 `wechat-cli start --log-level debug` 查看是否出现 `Bridge 发送开始` 和 `native 发送开始` 日志。
+5. 不要把服务暴露到公网；默认只建议监听 `127.0.0.1`。
 
 ---
 <p align="center">
